@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/Digital-Voting-Team/node-connector/pkg/httpserver"
 	"log"
-	"node-connector/httpserver"
 )
 
 func main() {

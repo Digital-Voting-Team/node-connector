@@ -1,4 +1,4 @@
-module node-connector
+module github.com/Digital-Voting-Team/node-connector
 
 go 1.20
 
