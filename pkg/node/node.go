@@ -12,27 +12,41 @@ type Node struct {
 }
 
 type Nodes struct {
-	Nodes    []*Node
-	NodesMap map[string]struct{}
-}
-
-// GetNodesIPs returns list of nodes ips
-func (n *Nodes) GetNodesIPs() []string {
-	var ips []string
-	for _, node := range n.Nodes {
-		ips = append(ips, node.IP)
-	}
-	return ips
+	NodesMap map[string]*Node
 }
 
 // AddNode add node to nodes if not exists
-func (n *Nodes) AddNode(node *Node) error {
-	if _, ok := n.NodesMap[node.IP]; ok {
-		return fmt.Errorf("node %s already exists", node.IP)
+func (n *Nodes) AddNode(ip string) error {
+	if _, ok := n.NodesMap[ip]; ok {
+		return fmt.Errorf("node %s already exists", ip)
 	}
 
-	n.Nodes = append(n.Nodes, node)
-	n.NodesMap[node.IP] = struct{}{}
+	n.NodesMap[ip] = &Node{
+		IP:           ip,
+		LastResponse: time.Now(),
+	}
 
 	return nil
+}
+
+// RemoveNode remove node from nodes if exists
+func (n *Nodes) RemoveNode(ip string) error {
+	if _, ok := n.NodesMap[ip]; !ok {
+		return fmt.Errorf("node %s does not exist", ip)
+	}
+
+	delete(n.NodesMap, ip)
+
+	return nil
+}
+
+// GetNodeList get node list from nodes
+func (n *Nodes) GetNodeList() []*Node {
+	var nodeList = []*Node{}
+
+	for ip := range n.NodesMap {
+		nodeList = append(nodeList, n.NodesMap[ip])
+	}
+
+	return nodeList
 }

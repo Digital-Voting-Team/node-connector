@@ -19,8 +19,7 @@ type Server struct {
 func NewServer() *Server {
 	s := &Server{
 		Nodes: &node.Nodes{
-			Nodes:    []*node.Node{},
-			NodesMap: make(map[string]struct{}),
+			NodesMap: make(map[string]*node.Node),
 		},
 		Echo: echo.New(),
 	}
@@ -41,28 +40,31 @@ func NewServer() *Server {
 
 // AddNodeHandler handles the route for adding a new node.
 func (s *Server) AddNodeHandler(c echo.Context) error {
-	currentNode := new(node.Node)
-	if err := c.Bind(currentNode); err != nil {
+	type request struct {
+		IP string `json:"ip"`
+	}
+
+	req := &request{}
+	err := c.Bind(req)
+	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	currentNode.LastResponse = time.Now()
-
-	err := s.Nodes.AddNode(currentNode)
+	err = s.Nodes.AddNode(req.IP)
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	// log the new currentNode
-	log.Printf("New currentNode added: %s", currentNode.IP)
+	log.Printf("New currentNode added: %s", req.IP)
 
-	return c.JSON(http.StatusCreated, currentNode)
+	return c.JSON(http.StatusCreated, s.Nodes.NodesMap[req.IP])
 }
 
 // ListNodesHandler handles the route for listing all nodes.
 func (s *Server) ListNodesHandler(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]interface{}{"ip_list": s.Nodes.Nodes})
+	return c.JSON(http.StatusOK, map[string]interface{}{"ip_list": s.Nodes.GetNodeList()})
 }
 
 // InitRouters initializes the route handlers.
@@ -73,7 +75,7 @@ func (s *Server) InitRouters() {
 
 // broadcast sends list of nodes to all nodes.
 func (s *Server) broadcast() {
-	for _, currentNode := range s.Nodes.Nodes {
+	for _, currentNode := range s.Nodes.NodesMap {
 		go func(node *node.Node) {
 			u := url.URL{Scheme: "wss", Host: node.IP, Path: "/ws"}
 			log.Printf("connecting to %s", u.String())
@@ -93,7 +95,7 @@ func (s *Server) broadcast() {
 			}(conn)
 
 			// Send nodes list to the currentNode in JSON format
-			err = conn.WriteJSON(s.Nodes.Nodes)
+			err = conn.WriteJSON(s.Nodes.GetNodeList())
 			if err != nil {
 				log.Println("write:", err)
 				return
