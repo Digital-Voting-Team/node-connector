@@ -1,6 +1,9 @@
 package node
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Node represents a single node with its IP address and last response time.
 type Node struct {
@@ -20,4 +23,16 @@ func (n *Nodes) GetNodesIPs() []string {
 		ips = append(ips, node.IP)
 	}
 	return ips
+}
+
+// AddNode add node to nodes if not exists
+func (n *Nodes) AddNode(node *Node) error {
+	if _, ok := n.NodesMap[node.IP]; ok {
+		return fmt.Errorf("node %s already exists", node.IP)
+	}
+
+	n.Nodes = append(n.Nodes, node)
+	n.NodesMap[node.IP] = struct{}{}
+
+	return nil
 }

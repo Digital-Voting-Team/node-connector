@@ -48,8 +48,11 @@ func (s *Server) AddNodeHandler(c echo.Context) error {
 
 	currentNode.LastResponse = time.Now()
 
-	s.Nodes.Nodes = append(s.Nodes.Nodes, currentNode)
-	s.Nodes.NodesMap[currentNode.IP] = struct{}{}
+	err := s.Nodes.AddNode(currentNode)
+
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
 
 	// log the new currentNode
 	log.Printf("New currentNode added: %s", currentNode.IP)
@@ -59,7 +62,7 @@ func (s *Server) AddNodeHandler(c echo.Context) error {
 
 // ListNodesHandler handles the route for listing all nodes.
 func (s *Server) ListNodesHandler(c echo.Context) error {
-	return c.JSON(http.StatusOK, s.Nodes.Nodes)
+	return c.JSON(http.StatusOK, map[string]interface{}{"ip_list": s.Nodes.Nodes})
 }
 
 // InitRouters initializes the route handlers.
@@ -78,7 +81,8 @@ func (s *Server) broadcast() {
 			// Establish a WebSocket connection
 			conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 			if err != nil {
-				log.Fatal("dial:", err)
+				log.Println("dial:", err)
+				return
 			}
 
 			defer func(conn *websocket.Conn) {
