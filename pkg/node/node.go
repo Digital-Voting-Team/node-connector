@@ -5,9 +5,10 @@ import (
 	"time"
 )
 
-// Node represents a single node with its IP address and last response time.
+// Node represents a single node with its Hostname address and last response time.
 type Node struct {
-	IP           string    `json:"ip"`
+	Hostname     string    `json:"hostname"`
+	ValidatorKey [33]byte  `json:"validator_key"`
 	LastResponse time.Time `json:"-"`
 }
 
@@ -15,14 +16,15 @@ type Nodes struct {
 	NodesMap map[string]*Node
 }
 
-// AddNode add node to nodes if not exists
-func (n *Nodes) AddNode(ip string) error {
-	if _, ok := n.NodesMap[ip]; ok {
-		return fmt.Errorf("node %s already exists", ip)
+// AddNode add node to nodes with all fields if not exists
+func (n *Nodes) AddNode(hostname string, validatorKey [33]byte) error {
+	if _, ok := n.NodesMap[hostname]; ok {
+		return fmt.Errorf("node %s already exists", hostname)
 	}
 
-	n.NodesMap[ip] = &Node{
-		IP:           ip,
+	n.NodesMap[hostname] = &Node{
+		Hostname:     hostname,
+		ValidatorKey: validatorKey,
 		LastResponse: time.Now(),
 	}
 
@@ -30,12 +32,12 @@ func (n *Nodes) AddNode(ip string) error {
 }
 
 // RemoveNode remove node from nodes if exists
-func (n *Nodes) RemoveNode(ip string) error {
-	if _, ok := n.NodesMap[ip]; !ok {
-		return fmt.Errorf("node %s does not exist", ip)
+func (n *Nodes) RemoveNode(hostname string) error {
+	if _, ok := n.NodesMap[hostname]; !ok {
+		return fmt.Errorf("node %s does not exist", hostname)
 	}
 
-	delete(n.NodesMap, ip)
+	delete(n.NodesMap, hostname)
 
 	return nil
 }

@@ -40,31 +40,27 @@ func NewServer() *Server {
 
 // AddNodeHandler handles the route for adding a new node.
 func (s *Server) AddNodeHandler(c echo.Context) error {
-	type request struct {
-		IP string `json:"ip"`
-	}
-
-	req := &request{}
+	req := &node.Node{}
 	err := c.Bind(req)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	err = s.Nodes.AddNode(req.IP)
+	err = s.Nodes.AddNode(req.Hostname, req.ValidatorKey)
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	// log the new currentNode
-	log.Printf("New currentNode added: %s", req.IP)
+	log.Printf("New currentNode added: %s", req.Hostname)
 
-	return c.JSON(http.StatusCreated, s.Nodes.NodesMap[req.IP])
+	return c.JSON(http.StatusCreated, s.Nodes.NodesMap[req.Hostname])
 }
 
 // ListNodesHandler handles the route for listing all nodes.
 func (s *Server) ListNodesHandler(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]interface{}{"ip_list": s.Nodes.GetNodeList()})
+	return c.JSON(http.StatusOK, map[string]interface{}{"node_list": s.Nodes.GetNodeList()})
 }
 
 // InitRouters initializes the route handlers.
@@ -77,7 +73,7 @@ func (s *Server) InitRouters() {
 func (s *Server) broadcast() {
 	for _, currentNode := range s.Nodes.NodesMap {
 		go func(node *node.Node) {
-			u := url.URL{Scheme: "wss", Host: node.IP, Path: "/ws"}
+			u := url.URL{Scheme: "wss", Host: node.Hostname, Path: "/ws"}
 			log.Printf("connecting to %s", u.String())
 
 			// Establish a WebSocket connection
