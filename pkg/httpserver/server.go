@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+const (
+	broadcastTime = 5 * time.Second
+	nodeTimeout   = 10 * time.Second
+	pingInterval  = 15 * time.Second
+)
+
 // Server represents the HTTP server.
 type Server struct {
 	Nodes *node.Nodes
@@ -27,11 +33,27 @@ func NewServer() *Server {
 
 	s.InitRouters()
 
-	// broadcast each 5 seconds
+	//broadcast each 5 seconds
 	go func() {
 		for {
 			s.broadcast()
-			time.Sleep(5 * time.Second)
+			time.Sleep(broadcastTime)
+		}
+	}()
+
+	// ping each 5 seconds, remove inactive nodes after 1 hour
+	go func() {
+		ticker := time.NewTicker(pingInterval)
+
+		for {
+			select {
+			case <-ticker.C:
+				log.Println("Removing inactive nodes")
+				s.Nodes.RemoveInactiveNodes(nodeTimeout)
+			default:
+				time.Sleep(broadcastTime)
+				s.Ping()
+			}
 		}
 	}()
 
@@ -73,7 +95,7 @@ func (s *Server) InitRouters() {
 func (s *Server) broadcast() {
 	for _, currentNode := range s.Nodes.NodesMap {
 		go func(node *node.Node) {
-			u := url.URL{Scheme: "wss", Host: node.Hostname, Path: "/ws"}
+			u := url.URL{Scheme: "ws", Host: node.Hostname, Path: "/ws"}
 			log.Printf("connecting to %s", u.String())
 
 			// Establish a WebSocket connection
@@ -84,6 +106,7 @@ func (s *Server) broadcast() {
 			}
 
 			defer func(conn *websocket.Conn) {
+				log.Println("Closing connection")
 				err := conn.Close()
 				if err != nil {
 					log.Println("close:", err)
@@ -97,12 +120,65 @@ func (s *Server) broadcast() {
 				return
 			}
 
+			//close connection
+			err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			if err != nil {
+				log.Println("write close:", err)
+				return
+			}
+		}(currentNode)
+	}
+}
+
+// Ping sends a ping to all nodes, wait for pong for 5 seconds and update time when answer received.
+func (s *Server) Ping() {
+	for _, currentNode := range s.Nodes.NodesMap {
+		go func(node *node.Node) {
+			u := url.URL{Scheme: "ws", Host: node.Hostname, Path: "/ping"}
+			log.Printf("connecting to %s", u.String())
+
+			// Establish a WebSocket connection
+			conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+			if err != nil {
+				log.Println("dial:", err)
+				return
+			}
+
+			conn.SetPongHandler(func(string) error {
+				println("Received pong")
+				node.LastResponse = time.Now()
+				return nil
+			})
+
+			defer func(conn *websocket.Conn) {
+				err := conn.Close()
+				if err != nil {
+					log.Println("close:", err)
+				}
+			}(conn)
+
+			// Send ping to the currentNode in JSON format
+			println("Sending ping")
+
+			err = conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(15*time.Second))
+			if err != nil {
+				log.Println("write:", err)
+				return
+			}
+
 			// close connection
 			err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
 				log.Println("write close:", err)
 				return
 			}
+
+			_, message, err := conn.ReadMessage()
+			if err != nil {
+				log.Println("Error reading message:", err)
+				return
+			}
+			log.Println("message received:", string(message))
 		}(currentNode)
 	}
 }

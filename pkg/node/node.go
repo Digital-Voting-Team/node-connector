@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -12,6 +13,7 @@ type Node struct {
 	LastResponse time.Time `json:"-"`
 }
 
+// TODO : add mutex for thread safety
 type Nodes struct {
 	NodesMap map[string]*Node
 }
@@ -51,4 +53,26 @@ func (n *Nodes) GetNodeList() []*Node {
 	}
 
 	return nodeList
+}
+
+// Update node last response time by hostname
+func (n *Nodes) Update(hostname string) error {
+	if _, ok := n.NodesMap[hostname]; !ok {
+		return fmt.Errorf("node %s does not exist", hostname)
+	}
+
+	n.NodesMap[hostname].LastResponse = time.Now()
+
+	return nil
+}
+
+// RemoveInactiveNodes remove nodes that have not responded for 1 hour
+func (n *Nodes) RemoveInactiveNodes(duration time.Duration) {
+	for hostname, node := range n.NodesMap {
+		log.Println("Node", hostname, "last response", time.Since(node.LastResponse), "ago")
+		if time.Since(node.LastResponse) > duration {
+			log.Println("Deleting node", hostname)
+			delete(n.NodesMap, hostname)
+		}
+	}
 }
