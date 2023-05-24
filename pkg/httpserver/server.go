@@ -24,10 +24,8 @@ type Server struct {
 
 func NewServer() *Server {
 	s := &Server{
-		Nodes: &node.Nodes{
-			NodesMap: make(map[string]*node.Node),
-		},
-		Echo: echo.New(),
+		Nodes: node.NewNodes(),
+		Echo:  echo.New(),
 	}
 	s.Echo.HideBanner = true
 
@@ -77,7 +75,7 @@ func (s *Server) AddNodeHandler(c echo.Context) error {
 	// log the new currentNode
 	log.Printf("New node added: %s", req.Hostname)
 
-	return c.JSON(http.StatusCreated, s.Nodes.NodesMap[req.Hostname])
+	return c.JSON(http.StatusCreated, req.Hostname)
 }
 
 // ListNodesHandler handles the route for listing all nodes.
@@ -93,7 +91,7 @@ func (s *Server) InitRouters() {
 
 // broadcast sends list of nodes to all nodes.
 func (s *Server) broadcast() {
-	for _, currentNode := range s.Nodes.NodesMap {
+	for _, currentNode := range s.Nodes.GetNodeList() {
 		go func(node *node.Node) {
 			// TODO : fix endpoint name passing
 			u := url.URL{Scheme: "ws", Host: node.Hostname, Path: "/update"}
@@ -133,7 +131,7 @@ func (s *Server) broadcast() {
 
 // Ping sends a ping to all nodes, wait for pong for 5 seconds and update time when answer received.
 func (s *Server) Ping() {
-	for _, currentNode := range s.Nodes.NodesMap {
+	for _, currentNode := range s.Nodes.GetNodeList() {
 		go func(node *node.Node) {
 			u := url.URL{Scheme: "ws", Host: node.Hostname, Path: "/ping"}
 			log.Printf("connecting to %s", u.String())
