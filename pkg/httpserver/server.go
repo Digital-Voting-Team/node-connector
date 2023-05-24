@@ -75,7 +75,7 @@ func (s *Server) AddNodeHandler(c echo.Context) error {
 	}
 
 	// log the new currentNode
-	log.Printf("New currentNode added: %s", req.Hostname)
+	log.Printf("New node added: %s", req.Hostname)
 
 	return c.JSON(http.StatusCreated, s.Nodes.NodesMap[req.Hostname])
 }
@@ -95,7 +95,8 @@ func (s *Server) InitRouters() {
 func (s *Server) broadcast() {
 	for _, currentNode := range s.Nodes.NodesMap {
 		go func(node *node.Node) {
-			u := url.URL{Scheme: "ws", Host: node.Hostname, Path: "/ws"}
+			// TODO : fix endpoint name passing
+			u := url.URL{Scheme: "ws", Host: node.Hostname, Path: "/update"}
 			log.Printf("connecting to %s", u.String())
 
 			// Establish a WebSocket connection
@@ -114,7 +115,7 @@ func (s *Server) broadcast() {
 			}(conn)
 
 			// Send nodes list to the currentNode in JSON format
-			err = conn.WriteJSON(s.Nodes.GetNodeList())
+			err = conn.WriteJSON(map[string]interface{}{"node_list": s.Nodes.GetNodeList()})
 			if err != nil {
 				log.Println("write:", err)
 				return
