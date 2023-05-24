@@ -1,8 +1,10 @@
 package node
 
 import (
+	"encoding/gob"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 )
@@ -14,7 +16,6 @@ type Node struct {
 	LastResponse time.Time `json:"-"`
 }
 
-// TODO : add mutex for thread safety
 type Nodes struct {
 	nodes map[string]*Node
 	mutex sync.Mutex
@@ -22,10 +23,98 @@ type Nodes struct {
 
 // NewNodes create new nodes
 func NewNodes() *Nodes {
-	return &Nodes{
+	nodes := &Nodes{
 		nodes: make(map[string]*Node),
-		mutex: sync.Mutex{},
 	}
+
+	err := nodes.LoadNodes()
+	if err != nil {
+		log.Println("Error loading nodes:", err)
+		return nil
+	}
+
+	// save nodes every 5 seconds
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			log.Println("Saving nodes")
+			err = nodes.SaveNodes()
+			if err != nil {
+				log.Println("Error saving nodes:", err)
+			}
+		}
+	}()
+
+	return nodes
+}
+
+const file = "nodes.dat"
+
+func (n *Nodes) SaveNodes() error {
+	f, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+
+	defer func(f *os.File) {
+		err = f.Close()
+		if err != nil {
+			log.Println("Error closing file:", err)
+		}
+	}(f)
+
+	enc := gob.NewEncoder(f)
+	for _, node := range n.GetNodeList() {
+		if err = enc.Encode(node); err != nil {
+			log.Println(err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (n *Nodes) LoadNodes() error {
+	// open or create file
+	f, err := os.OpenFile(file, os.O_CREATE|os.O_RDONLY, 0666)
+	if err != nil {
+		return err
+	}
+
+	defer func(f *os.File) {
+		err = f.Close()
+		if err != nil {
+			log.Println("Error closing file:", err)
+		}
+	}(f)
+
+	// exit if file is empty
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+
+	if fi.Size() == 0 {
+		return nil
+	}
+
+	dec := gob.NewDecoder(f)
+	for {
+		node := &Node{}
+
+		if err = dec.Decode(&node); err != nil {
+			if err.Error() == "EOF" {
+				break
+			}
+			return err
+		}
+
+		err = n.AddNode(node.Hostname, node.ValidatorKey)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // AddNode add node to nodes with all fields if not exists
@@ -57,7 +146,7 @@ func (n *Nodes) RemoveNode(hostname string) error {
 
 	delete(n.nodes, hostname)
 
-	return nil
+	return n.SaveNodes()
 }
 
 // GetNodeList get node list from nodes
